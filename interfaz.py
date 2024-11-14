@@ -1,9 +1,9 @@
 import sys
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QPushButton, QTextEdit, QVBoxLayout, QSizePolicy, QFileDialog
-)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QPushButton, QTextEdit, QVBoxLayout, QSizePolicy, QFileDialog)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
+from lexico import AnalizadorLexico
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -86,22 +86,35 @@ class MainWindow(QMainWindow):
 
     def abrir_archivo(self):
         """Abrir un archivo de texto."""
-        file_path, _ = QFileDialog.getOpenFileName(
+        self.file_path, _ = QFileDialog.getOpenFileName(
             self, "Abrir archivo de texto", "", "Archivos de texto (*.txt)"
         )
 
-        if file_path:
+        if self.file_path:
             try:
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    contenido = file.read()
+                with open(self.file_path, 'r', encoding='utf-8') as file:
+                    self.contenido = file.read()
                     self.text_input.clear()  # Limpiar el contenido anterior
-                    self.text_input.setPlainText(contenido)
+                    self.text_input.setPlainText(self.contenido)
                     self.text_input.setEnabled(True)  # Habilitar el cuadro de texto
                     self.text_input.setReadOnly(True)  # Establecer en modo solo lectura
                     self.text_input.verticalScrollBar().setValue(0)  # Ajustar al inicio del documento
                     self.actualizar_botones()
             except Exception as e:
                 print(f"Error al leer el archivo: {e}")
+
+    def cargar_buffer(self):
+        with open(self.file_path, 'r', encoding='utf-8') as file:
+            buffer = []
+            cont = 0
+            for line in file:
+                buffer.append(line)
+                cont += 1
+
+                if cont == 10 or line == "":
+                    yield "".join(buffer)
+                    buffer = []
+                    cont = 0
 
     def guardar_archivo(self):
         """Guardar el contenido del cuadro de texto en un archivo."""
@@ -120,7 +133,45 @@ class MainWindow(QMainWindow):
 
     def accion_analizar(self):
         """Acción al presionar el botón 'ANALIZAR'."""
+        self.buffer = self.cargar_buffer()
+        self.Analyzer = AnalizadorLexico()
+
+
+        # Lists for every list returned list from the function tokenize
+        token = []
+        lexema = []
+        renglon = []
+        columna = []
+        errors = []  # Lista para recolectar mensajes de error
+
+        # Tokenize and reload of the buffer
+        for i in self.buffer:
+            try:
+                print(f"Contenido del buffer: {i}")
+                t, lex, lin, col = self.Analyzer.tokenizar(i)
+                print(f"Tokens recibidos: {t}, lexemas: {lex}, líneas: {lin}, columnas: {col}")  # Debug: Resultados de tokenizar
+                token += t
+                lexema += lex
+                renglon += lin
+                columna += col
+            except RuntimeError as e:
+                # Capturamos el error y lo agregamos a la lista de errores
+                errors.append(str(e))
+
+        tokens_recognized = "\n".join(f"Token = {tok}, Lexeme = '{lex}', Row = {lin}, Column = {col}" for tok, lex, lin, col in zip(token, lexema, renglon, columna))
+        
+        # Formatear los errores en un string de salida
+        if len(errors) > 0:
+            errors_output = "\n".join(errors)
+        else:
+            errors_output = "No se encontraron errores."
+
+
+        #print('\nRecognize Tokens: ', token)
         print("Analizando texto...")
+
+        self.tokens_output.setText(tokens_recognized)
+        self.errors_output.setText(errors_output)
 
     def crear_txt_edit(self, placeholder_text, editable=True):
         """Crear un QTextEdit con barras de desplazamiento y un texto de marcador."""
