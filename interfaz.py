@@ -104,17 +104,31 @@ class MainWindow(QMainWindow):
                 print(f"Error al leer el archivo: {e}")
 
     def cargar_buffer(self):
-        with open(self.file_path, 'r', encoding='utf-8') as file:
-            buffer = []
-            cont = 0
-            for line in file:
-                buffer.append(line)
+        extraer_texto = self.text_input.toPlainText()
+        file = extraer_texto.splitlines()  # Esto es una lista de líneas
+        buffer = []
+        cont = 0
+        
+        while file:
+            # Añade línea por línea en lugar de toda la lista
+            for linea in file:
+                buffer.append(linea)
                 cont += 1
-
-                if cont == 10 or line == "":
-                    yield "".join(buffer)
-                    buffer = []
+                
+                # Si el buffer alcanza 10 líneas o no hay más líneas, devuelve el contenido
+                if cont == 10:
+                    buf = "\n".join(buffer)  # Une las líneas con saltos de línea
                     cont = 0
+                    yield buf
+                    buffer = []  # Limpia el buffer después de generarlo
+            
+            # Vuelve a cargar `file` como lista vacía para terminar el bucle
+            file = []
+
+        # Si quedan líneas en el buffer al finalizar, se devuelven
+        if buffer:
+            buf = "\n".join(buffer)
+            yield buf
 
     def guardar_archivo(self):
         """Guardar el contenido del cuadro de texto en un archivo."""
@@ -136,42 +150,42 @@ class MainWindow(QMainWindow):
         self.buffer = self.cargar_buffer()
         self.Analyzer = AnalizadorLexico()
 
-
-        # Lists for every list returned list from the function tokenize
+        # Inicialización de listas para almacenar resultados
         token = []
         lexema = []
         renglon = []
         columna = []
         errors = []  # Lista para recolectar mensajes de error
 
-        # Tokenize and reload of the buffer
+        # Tokenizar y cargar el buffer
         for i in self.buffer:
             try:
-                print(f"Contenido del buffer: {i}")
-                t, lex, lin, col = self.Analyzer.tokenizar(i)
-                print(f"Tokens recibidos: {t}, lexemas: {lex}, líneas: {lin}, columnas: {col}")  # Debug: Resultados de tokenizar
+                # Intentar tokenizar el código
+                t, lex, lin, col, errs = self.Analyzer.tokenizar(i)
+                # Agregar tokens reconocidos a las listas
                 token += t
                 lexema += lex
                 renglon += lin
                 columna += col
+                errors += errs
             except RuntimeError as e:
-                # Capturamos el error y lo agregamos a la lista de errores
+                # Agregar el error a la lista sin interrumpir la iteración
                 errors.append(str(e))
 
-        tokens_recognized = "\n".join(f"Token = {tok}, Lexeme = '{lex}', Row = {lin}, Column = {col}" for tok, lex, lin, col in zip(token, lexema, renglon, columna))
-        
-        # Formatear los errores en un string de salida
-        if len(errors) > 0:
-            errors_output = "\n".join(errors)
-        else:
-            errors_output = "No se encontraron errores."
+        # Crear la salida de tokens reconocidos
+        tokens_recognized = "\n".join(
+            f"Linea {lin} = Token tipo {tok} donde Lexema es '{lex}' en la Columna: {col}"
+            for lin, tok, lex, col in zip(renglon, token, lexema, columna)
+        )
+        # Formatear errores para la salida
+        errors_output = "\n".join(errors) if errors else "No se encontraron errores."
 
-
-        #print('\nRecognize Tokens: ', token)
         print("Analizando texto...")
 
+        # Mostrar tokens y errores en la interfaz
         self.tokens_output.setText(tokens_recognized)
         self.errors_output.setText(errors_output)
+
 
     def crear_txt_edit(self, placeholder_text, editable=True):
         """Crear un QTextEdit con barras de desplazamiento y un texto de marcador."""
